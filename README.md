@@ -42,8 +42,8 @@ The proxy sits between the ECR and the PT on the same device. Both connections u
 ### Key characteristics
 
 - **Single client** — The proxy accepts one ECR connection at a time. A second client will be accepted only after the first disconnects.
-- **Transparent protocol** — The proxy does not alter the ZVT wire format. Commands and responses are forwarded as-is, with the exception of [age Verification](#age-verification).
-- **Command filtering** — Not all ZVT commands are allowed through the proxy. Certain commands (e.g. Initialization, ResetTerminal, ChangePassword) are rejected with an Abort response. See [Command Handling](#command-handling) for details.
+- **Transparent protocol** — The proxy does not alter the ZVT wire format. Commands and responses are forwarded as-is, with the exception of [Age Verification](#age-verification).
+- **Command filtering** — Not all ZVT commands are allowed through the proxy. Certain commands (e.g. Initialisation, Reset Terminal, Change Password) are rejected with an Abort response. See [Command Handling](#command-handling) for details.
 - **Standard ZVT flow** — The ACK / response exchange follows the [ZVT specification][zvt-spec] exactly. The ECR sends a command, receives an ACK (or error), then receives intermediate status and a terminal response (Completion or Abort), acknowledging each step as usual.
 
 ## Command Handling
@@ -57,15 +57,15 @@ These commands are forwarded to the PT and their responses relayed back to the E
 | Command | Tag | ZVT Spec |
 |---------|-----|----------|
 | Authorization | `06 01` | 2.2 |
-| Pre-Authorization / Reservation | `06 22` | 2.8 |
+| Pre-Authorisation / Reservation | `06 22` | 2.8 |
 | Book Total | `06 24` | 2.13 |
 | Partial Reversal | `06 23` | 2.10 |
-| Pre-Auth Reversal | `06 25` | 2.14 |
+| Pre-Authorisation Reversal | `06 25` | 2.14 |
 | Refund | `06 31` | 2.15 |
 | Diagnosis | `06 70` | 2.18 |
 | Print System Configuration | `06 1A` | 2.47 |
 | Read Card | `06 C0` | 2.22 |
-| Activate Service Mode | `08 01` | 2.57 |
+| Activate Service-Mode | `08 01` | 2.57 |
 | Abort | `06 B0` | 2.24 |
 
 ### Conditionally forwarded commands
@@ -80,12 +80,12 @@ These commands are only allowed when the corresponding feature is **delegated to
 
 ### Denied commands
 
-All commands not listed above are rejected immediately with `FunctionNotPossible` (`84 83`). This includes but is not limited to:
+All commands not listed above are rejected immediately with "function not possible" (`84 83`). This includes but is not limited to:
 
 | Command | Tag | ZVT Spec | Note |
 |---------|-----|----------|------|
-| Initialization | `06 93` | 2.19 | Terminal ID is managed by SENVEND. |
-| Set Terminal ID | `06 1B` | 2.48 | Terminal ID is managed by SENVEND. |
+| Initialisation | `06 93` | 2.19 | Terminal-ID is managed by SENVEND. |
+| Set Terminal-ID | `06 1B` | 2.48 | Terminal-ID is managed by SENVEND. |
 | Reset Terminal | `06 18` | 2.46 | |
 | Change Password | `06 95` | 2.51 | |
 | Select Language | `08 30` | 2.38 | Not yet supported by Verifone. Proxy support planned for Q2 2026. |
@@ -94,23 +94,23 @@ Any unknown or unrecognized command tag is also denied.
 
 ## Age Verification
 
-When an Authorization (`06 01`) or Reservation (`06 22`) command contains a `minimum_age` TLV (tag `1F6B`, see [ZVT spec][zvt-spec] section 9.4.2), the proxy intercepts the command and triggers an age verification flow on the SENVEND device before forwarding it to the PT.
+When an Authorization (`06 01`) or Reservation (`06 22`) command contains an Age verification control TLV (tag `1F6B`, see [ZVT spec][zvt-spec] section 9.4.2), the proxy intercepts the command and triggers an age verification flow on the SENVEND device before forwarding it to the PT.
 
 ### Flow from the ECR's perspective
 
-1. **ECR sends** Authorization or Reservation with `minimum_age` TLV (e.g. `18` for age 18+).
+1. **ECR sends** Authorization or Reservation with Age verification control TLV (e.g. `18` for age 18+).
 1. **Proxy responds** with an immediate ACK (`80 00`).
-1. **Age verification** takes place on the SENVEND device. This may take up to several minutes depending on the verification method. During this period, the proxy may send `IntermediateStatusInformation` (`04 FF`) messages to inform the ECR about the verification progress — see [Intermediate status during age verification](#intermediate-status-during-age-verification) below.
-1. **On approval:** The command is forwarded to the PT. The normal ZVT response exchange proceeds — the ECR receives IntermediateStatusInformation, StatusInformation, and Completion as usual. The `age_verification_result` TLV (tag `1F6C`) is injected into the StatusInformation with value `0x01` (minimum age reached).
+1. **Age verification** takes place on the SENVEND device. This may take up to several minutes depending on the verification method. During this period, the proxy may send Intermediate Status Information (`04 FF`) messages to inform the ECR about the verification progress — see [Intermediate status during age verification](#intermediate-status-during-age-verification) below.
+1. **On approval:** The command is forwarded to the PT. The normal ZVT response exchange proceeds — the ECR receives Intermediate Status Information, Status Information, and Completion as usual. The Age verification result TLV (tag `1F6C`) is injected into the Status Information with value `0x01` (minimum age reached).
 1. **On denial or timeout:** The ECR receives an Abort (`06 1E`).
 
 ### Intermediate status during age verification
 
-During the age verification period, the proxy may send `IntermediateStatusInformation` (`04 FF`) messages to keep the ECR informed about the progress. These look identical to regular intermediate status messages from the PT.
+During the age verification period, the proxy may send Intermediate Status Information (`04 FF`) messages to keep the ECR informed about the progress. These look identical to regular intermediate status messages from the PT.
 
 Each message contains:
 
-- **Status byte:** `PleaseWait` (`0x0E`)
+- **Status byte:** "Please wait" (`0x0E`)
 - **Text line** — a human-readable message describing the event
 - **Age verification result** (TLV tag `1F6C`) — a machine-readable result code
 
@@ -132,26 +132,26 @@ The full list of defined `1F6C` values is:
 
 **ECR behavior:**
 
-- The ECR **must ACK** each `IntermediateStatusInformation` with a standard PT ACK (`80 00`), as with any ZVT intermediate status message.
+- The ECR **must ACK** each Intermediate Status Information with a standard PT ACK (`80 00`), as with any ZVT intermediate status message.
 - The "retry" message is **informational only**. It indicates that a verification attempt did not succeed, but the verification session remains active and the user can try again on the SENVEND device.
-- The ECR **may** abort the transaction at this point by sending an `EcrAbort` (`06 B0`), but we **recommend against it**. Let the user retry on the SENVEND device; use the message for display or logging purposes only.
+- The ECR **may** abort the transaction at this point by sending an Abort (`06 B0`), but we **recommend against it**. Let the user retry on the SENVEND device; use the message for display or logging purposes only.
 - The session ends naturally when the user succeeds, aborts on the SENVEND device, or the timeout expires.
 - ECRs should rely on the `1F6C` TLV value, not the text. The text is currently English only; localized messages tied to the PT's configured language (Select Language) are planned for a future release.
 
 **When these messages are sent:**
 
-By default, the proxy only sends these messages if the ECR requested intermediate status information during its Registration by setting the `intermediate_status_information` bit in the config-byte (see [ZVT spec][zvt-spec] section 2.1). This matches standard ZVT behavior.
+By default, the proxy only sends these messages if the ECR requested intermediate status information during its Registration by setting the "ECR requires intermediate status-Information" bit in the `<config-byte>` (see [ZVT spec][zvt-spec] section 2.1). This matches standard ZVT behavior.
 
 SENVEND can override this behavior per device via the [age verification status policy](#age-verification-status-policy). Contact SENVEND to adjust this setting.
 
-The ECR's intermediate status preference persists across TCP client disconnects. Once the ECR has registered with the proxy (setting the `intermediate_status_information` bit in its config-byte), the proxy remembers this preference until an explicit Log-Off (`06 02`) or a subsequent Registration (`06 00`) overwrites it. This matches real PT behavior: if the ECR's TCP connection drops and it reconnects without re-registering, the proxy continues to honor the previously registered setting.
+The ECR's intermediate status preference persists across TCP client disconnects. Once the ECR has registered with the proxy (setting the "ECR requires intermediate status-Information" bit in its `<config-byte>`), the proxy remembers this preference until an explicit Log-Off (`06 02`) or a subsequent Registration (`06 00`) overwrites it. This matches real PT behavior: if the ECR's TCP connection drops and it reconnects without re-registering, the proxy continues to honor the previously registered setting.
 
 ### Important notes for integrators
 
 - The ECR receives the ACK immediately, but the first PT response may be delayed while age verification is in progress. Adjust any response timeouts accordingly.
 - The ECR can send an Abort (`06 B0`) during the verification period to cancel the transaction.
-- On a successful payment, the StatusInformation response will contain `age_verification_result` (tag `1F6C`) with value `0x01` — this is injected by the proxy and was not sent by the PT.
-- To receive progress updates during age verification, the ECR should set the `intermediate_status_information` bit in its Registration config-byte.
+- On a successful payment, the Status Information response will contain Age verification result (tag `1F6C`) with value `0x01` — this is injected by the proxy and was not sent by the PT.
+- To receive progress updates during age verification, the ECR should set the "ECR requires intermediate status-Information" bit in its Registration `<config-byte>`.
 
 ## Configuration
 
@@ -177,13 +177,13 @@ When a feature is **not** delegated to the ECR, SENVEND manages it automatically
 
 ### Age verification status policy
 
-Controls whether the proxy sends `IntermediateStatusInformation` during age verification. See [Intermediate status during age verification](#intermediate-status-during-age-verification) in the Age Verification section for what these messages contain.
+Controls whether the proxy sends Intermediate Status Information during age verification. See [Intermediate status during age verification](#intermediate-status-during-age-verification) in the Age Verification section for what these messages contain.
 
 | Policy | Description |
 |--------|-------------|
 | `Enabled` | Always send status updates during age verification. |
 | `Disabled` | Never send status updates during age verification. |
-| `Registration` (default) | Send only if the ECR requested intermediate status information in its Registration config-byte. |
+| `Registration` (default) | Send only if the ECR requested intermediate status information in its Registration `<config-byte>`. |
 
 ## Help Us Improve
 
