@@ -185,6 +185,21 @@ Controls whether the proxy sends Intermediate Status Information during age veri
 | `Disabled` | Never send status updates during age verification. |
 | `Registration` (default) | Send only if the ECR requested intermediate status information in its Registration `<config-byte>`. |
 
+## Troubleshooting
+
+### Why does the PT send dial-up commands (`06 D8` / `06 D9` / `06 DA` / `06 DB`)?
+
+Because your ECR advertised them. During Registration (`06 00`), the permitted-commands list (TLV tag `26`) tells the PT which PT→ECR commands the ECR is willing to receive. If that list includes the dial-up / DFÜ commands, the PT assumes the ECR provides a dial-up channel and will route host communication through the ECR instead of using its own connection:
+
+| Command | Tag | ZVT Spec |
+|---------|-----|----------|
+| Dial-Up | `06 D8` | 3.8 |
+| Transmit Data via Dial-Up | `06 D9` | 3.10 |
+| Receive Data via Dial-Up | `06 DA` | 3.11 |
+| Hang-Up | `06 DB` | 3.9 |
+
+Most ECRs do not implement dial-up forwarding, so these sessions fail and the transaction ends with result code `9B`. **Fix:** remove the dial-up tags from the tag `26` permitted-commands container in your Registration so the PT keeps using its own host connection.
+
 ## Help Us Improve
 
 Feel free to open issues if something is missing, unclear or not working as expected.
