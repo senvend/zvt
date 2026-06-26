@@ -185,6 +185,22 @@ Controls whether the proxy sends Intermediate Status Information during age veri
 | `Disabled` | Never send status updates during age verification. |
 | `Registration` (default) | Send only if the ECR requested intermediate status information in its Registration `<config-byte>`. |
 
+## CLI Testing Tool
+
+`zvt_cli` is a small command-line tool for talking to the [SENVEND ZVT Proxy](#overview) — or any payment terminal — over ZVT/TCP. It is handy during integration for sending commands (Authorization, Reservation, Read Card, …) by hand and inspecting the responses.
+
+Prebuilt binaries are published on the [Releases page](https://github.com/senvend/zvt/releases):
+
+| Platform | Asset |
+|----------|-------|
+| Linux (x86_64) | `zvt_cli-<version>-linux-x86_64` |
+| Linux (aarch64) | `zvt_cli-<version>-linux-aarch64` |
+| Windows (x86_64) | `zvt_cli-<version>-windows-x86_64.exe` |
+
+Run `zvt_cli --help` to list the available commands and options.
+
+> **Note:** These are experimental testing builds intended for development and integration only — not for production use.
+
 ## Troubleshooting
 
 ### Why does the PT send dial-up commands (`06 D8` / `06 D9` / `06 DA` / `06 DB`)?
