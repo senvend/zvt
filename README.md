@@ -42,7 +42,7 @@ The proxy sits between the ECR and the PT on the same device. Both connections u
 ### Key characteristics
 
 - **Single client** — The proxy accepts one ECR connection at a time. A second client will be accepted only after the first disconnects.
-- **Transparent protocol** — The proxy does not alter the ZVT wire format. Commands and responses are forwarded as-is, with the exception of [Age Verification](#age-verification).
+- **Transparent protocol** — The proxy does not alter the ZVT wire format. Commands and responses are forwarded as-is, with the exception of [Age Verification](#age-verification) and [Select Language](#select-language).
 - **Command filtering** — Not all ZVT commands are allowed through the proxy. Certain commands (e.g. Initialisation, Reset Terminal, Change Password) are rejected with an Abort response. See [Command Handling](#command-handling) for details.
 - **Standard ZVT flow** — The ACK / response exchange follows the [ZVT specification][zvt-spec] exactly. The ECR sends a command, receives an ACK (or error), then receives intermediate status and a terminal response (Completion or Abort), acknowledging each step as usual.
 
@@ -88,9 +88,18 @@ All commands not listed above are rejected immediately with "function not possib
 | Set Terminal-ID | `06 1B` | 2.48 | Terminal-ID is managed by SENVEND. |
 | Reset Terminal | `06 18` | 2.46 | |
 | Change Password | `06 95` | 2.51 | |
-| Select Language | `08 30` | 2.38 | Not yet supported by Verifone. Proxy support planned for Q2 2026. |
 
 Any unknown or unrecognized command tag is also denied.
+
+### Intercepted commands
+
+These commands are not forwarded transparently — the proxy handles them on the SENVEND device and may only conditionally involve the PT:
+
+| Command | Tag | ZVT Spec | Handling |
+|---------|-----|----------|----------|
+| Select Language | `08 30` | 2.38 | See [Select Language](#select-language). |
+
+[Age Verification](#age-verification) is also an interception, but it is triggered by a TLV inside an otherwise-forwarded Authorization or Reservation rather than by a distinct command tag.
 
 ## Age Verification
 
@@ -142,7 +151,7 @@ The full list of defined `1F6C` values is:
 
 By default, the proxy only sends these messages if the ECR requested intermediate status information during its Registration by setting the "ECR requires intermediate status-Information" bit in the `<config-byte>` (see [ZVT spec][zvt-spec] section 2.1). This matches standard ZVT behavior.
 
-SENVEND can override this behavior per device via the [age verification status policy](#age-verification-status-policy). Contact SENVEND to adjust this setting.
+SENVEND can override this behavior per device via the [intermediate status policy](#intermediate-status-policy). Contact SENVEND to adjust this setting.
 
 The ECR's intermediate status preference persists across TCP client disconnects. Once the ECR has registered with the proxy (setting the "ECR requires intermediate status-Information" bit in its `<config-byte>`), the proxy remembers this preference until an explicit Log-Off (`06 02`) or a subsequent Registration (`06 00`) overwrites it. This matches real PT behavior: if the ECR's TCP connection drops and it reconnects without re-registering, the proxy continues to honor the previously registered setting.
 
@@ -152,6 +161,44 @@ The ECR's intermediate status preference persists across TCP client disconnects.
 - The ECR can send an Abort (`06 B0`) during the verification period to cancel the transaction.
 - On a successful payment, the Status Information response will contain Age verification result (tag `1F6C`) with value `0x01` — this is injected by the proxy and was not sent by the PT.
 - To receive progress updates during age verification, the ECR should set the "ECR requires intermediate status-Information" bit in its Registration `<config-byte>`.
+
+## Select Language
+
+The Select Language (`08 30`, [ZVT spec][zvt-spec] section 2.38) command sets the display language. The proxy intercepts it rather than forwarding it transparently, because the language is applied both to the SENVEND device's own UI and — where the terminal firmware supports it — to the payment terminal.
+
+### Flow from the ECR's perspective
+
+1. **ECR sends** Select Language (`08 30`) with the desired language.
+1. **Proxy asks the SENVEND device to apply the language to its UI.** This is the primary effect and is attempted first, before the PT is involved.
+1. **On success, depending on the terminal firmware:**
+   - If the terminal's function level supports Select Language, the command is forwarded to the PT and its response relayed to the ECR (standard ACK + Completion exchange).
+   - If the terminal firmware does **not** support Select Language (older Verifone function levels), the proxy does not contact the PT. The device UI language was still changed, so the ECR receives a synthesized ACK (`80 00`) followed by a Completion (`06 0F`).
+1. **On failure** (the SENVEND device cannot apply the requested language), the ECR receives an ACK (`80 00`), optionally an Intermediate Status Information (`04 FF`) describing the reason, and an Abort (`06 1E`).
+
+### Failure handling
+
+When the SENVEND device rejects the language change, the proxy reports:
+
+- An ACK (`80 00`).
+- An Intermediate Status Information (`04 FF`) with status byte "Processing error" (`0x0D`) and a human-readable text describing the reason — sent only when intermediate status is enabled (see below).
+- An Abort (`06 1E`).
+
+The reason texts are:
+
+| Reason | Text |
+|--------|------|
+| No language specified | `Language change failed: no language specified` |
+| Language not supported by the device | `Language change failed: language not supported` |
+| Language not in the device's configured set | `Language change failed: language not configured` |
+| Unspecified | `Language change failed` |
+
+If the command cannot be parsed, or the SENVEND device does not respond in time, the ECR instead receives a pre-ACK "function not possible" (`84 83`) — no ACK precedes it.
+
+> **Note:** When the device cannot apply the exact requested language it may fall back to another configured language (or German). The Abort signals that the *requested* language was not applied; it does not mean the device has no usable language. As with age verification, the text is informational and currently English only.
+
+**When the intermediate status message is sent:**
+
+The failure-reason Intermediate Status Information follows the same gating as age verification: it is sent only if the ECR requested intermediate status information in its Registration `<config-byte>`, or if SENVEND has overridden this via the [intermediate status policy](#intermediate-status-policy). The Abort is always sent regardless. The ECR **must ACK** the Intermediate Status Information with a standard PT ACK (`80 00`).
 
 ## Configuration
 
@@ -175,14 +222,14 @@ When proxy mode is enabled, certain features are **delegated to the ECR** by def
 
 When a feature is **not** delegated to the ECR, SENVEND manages it automatically and the corresponding commands are rejected by the proxy.
 
-### Age verification status policy
+### Intermediate status policy
 
-Controls whether the proxy sends Intermediate Status Information during age verification. See [Intermediate status during age verification](#intermediate-status-during-age-verification) in the Age Verification section for what these messages contain.
+Controls whether the proxy sends the Intermediate Status Information it synthesizes itself — during [age verification](#intermediate-status-during-age-verification) and on [Select Language](#failure-handling) failure. It does not affect intermediate status forwarded from the PT.
 
 | Policy | Description |
 |--------|-------------|
-| `Enabled` | Always send status updates during age verification. |
-| `Disabled` | Never send status updates during age verification. |
+| `Enabled` | Always send proxy-synthesized status updates. |
+| `Disabled` | Never send proxy-synthesized status updates. |
 | `Registration` (default) | Send only if the ECR requested intermediate status information in its Registration `<config-byte>`. |
 
 ## CLI Testing Tool
