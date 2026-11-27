@@ -151,7 +151,7 @@ The full list of defined `1F6C` values is:
 
 By default, the proxy only sends these messages if the ECR requested intermediate status information during its Registration by setting the "ECR requires intermediate status-Information" bit in the `<config-byte>` (see [ZVT spec][zvt-spec] section 2.1). This matches standard ZVT behavior.
 
-SENVEND can override this behavior per device via the [intermediate status policy](#intermediate-status-policy). Contact SENVEND to adjust this setting.
+You can override this behavior per device via the [intermediate status policy](#intermediate-status-policy).
 
 The ECR's intermediate status preference persists across TCP client disconnects. Once the ECR has registered with the proxy (setting the "ECR requires intermediate status-Information" bit in its `<config-byte>`), the proxy remembers this preference until an explicit Log-Off (`06 02`) or a subsequent Registration (`06 00`) overwrites it. This matches real PT behavior: if the ECR's TCP connection drops and it reconnects without re-registering, the proxy continues to honor the previously registered setting.
 
@@ -198,11 +198,11 @@ If the command cannot be parsed, or the SENVEND device does not respond in time,
 
 **When the intermediate status message is sent:**
 
-The failure-reason Intermediate Status Information follows the same gating as age verification: it is sent only if the ECR requested intermediate status information in its Registration `<config-byte>`, or if SENVEND has overridden this via the [intermediate status policy](#intermediate-status-policy). The Abort is always sent regardless. The ECR **must ACK** the Intermediate Status Information with a standard PT ACK (`80 00`).
+The failure-reason Intermediate Status Information follows the same gating as age verification: it is sent only if the ECR requested intermediate status information in its Registration `<config-byte>`, or if the [intermediate status policy](#intermediate-status-policy) overrides this. The Abort is always sent regardless. The ECR **must ACK** the Intermediate Status Information with a standard PT ACK (`80 00`).
 
 ## Configuration
 
-ZVT Proxy Mode is currently configured by SENVEND. To enable proxy mode on your device, please contact us at [api@senvend.com](mailto:api@senvend.com). Self-service configuration via [my.senvend.com](https://my.senvend.com) is planned for the future.
+You configure ZVT Proxy Mode yourself on [my.senvend.com](https://my.senvend.com): open the machine under **Automaten**, switch to the **Terminal** tab and expand the **ZVT-Proxy** section. There you enable the proxy and set its port and intermediate status policy. Saving sends the settings to the SENVEND device.
 
 ### Proxy server
 
@@ -213,7 +213,7 @@ ZVT Proxy Mode is currently configured by SENVEND. To enable proxy mode on your 
 
 ### Feature delegation
 
-When proxy mode is enabled, certain features are **delegated to the ECR** by default — meaning the ECR is responsible for managing them via the corresponding ZVT commands. SENVEND can override these defaults per device.
+When proxy mode is enabled, certain features are **delegated to the ECR** by default — meaning the ECR is responsible for managing them via the corresponding ZVT commands. SENVEND can override these defaults per device on request.
 
 | Feature | Default (proxy enabled) | Effect when delegated to ECR |
 |---------|------------------------|------------------------------|
@@ -226,11 +226,11 @@ When a feature is **not** delegated to the ECR, SENVEND manages it automatically
 
 Controls whether the proxy sends the Intermediate Status Information it synthesizes itself — during [age verification](#intermediate-status-during-age-verification) and on [Select Language](#failure-handling) failure. It does not affect intermediate status forwarded from the PT.
 
-| Policy | Description |
-|--------|-------------|
-| `Enabled` | Always send proxy-synthesized status updates. |
-| `Disabled` | Never send proxy-synthesized status updates. |
-| `Registration` (default) | Send only if the ECR requested intermediate status information in its Registration `<config-byte>`. |
+| Policy | Label on my.senvend.com | Description |
+|--------|-------------------------|-------------|
+| `Enabled` | Immer senden | Always send proxy-synthesized status updates. |
+| `Disabled` | Nie senden | Never send proxy-synthesized status updates. |
+| `Registration` (default) | Wie bei der Registrierung angefordert | Send only if the ECR requested intermediate status information in its Registration `<config-byte>`. |
 
 ## CLI Testing Tool
 
